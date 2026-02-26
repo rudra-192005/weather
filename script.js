@@ -1,5 +1,5 @@
 // API Configuration
-const API_KEY = '1a24ce3843af7e63891191b9dfd4ca27'; // Replace with your OpenWeatherMap API key
+const API_KEY = 'YOUR_API_KEY_HERE'; // REPLACE THIS WITH YOUR ACTUAL API KEY
 const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 
 // DOM Elements
@@ -79,35 +79,62 @@ function getCurrentLocation() {
     }
 }
 
-// Get weather by city name
+// Get weather by city name with improved error handling
 async function getWeatherData(city) {
+    // Check if API key is set
+    if (API_KEY === 'YOUR_API_KEY_HERE') {
+        showError('Please set your OpenWeatherMap API key in script.js');
+        return;
+    }
+
     try {
         showLoading();
         hideError();
         
+        console.log('Fetching weather for:', city); // Debug log
+        
         // Fetch current weather
         const weatherResponse = await fetch(
-            `${BASE_URL}/weather?q=${city}&units=metric&appid=${API_KEY}`
+            `${BASE_URL}/weather?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`
         );
         
+        console.log('Weather Response Status:', weatherResponse.status); // Debug log
+        
         if (!weatherResponse.ok) {
-            throw new Error('City not found');
+            if (weatherResponse.status === 401) {
+                throw new Error('Invalid API key. Please check your OpenWeatherMap API key');
+            } else if (weatherResponse.status === 404) {
+                throw new Error(`City "${city}" not found`);
+            } else {
+                throw new Error(`API Error: ${weatherResponse.status}`);
+            }
         }
         
         const weatherData = await weatherResponse.json();
+        console.log('Weather Data:', weatherData); // Debug log
         
         // Fetch 5-day forecast
         const forecastResponse = await fetch(
-            `${BASE_URL}/forecast?q=${city}&units=metric&appid=${API_KEY}`
+            `${BASE_URL}/forecast?q=${encodeURIComponent(city)}&units=metric&appid=${API_KEY}`
         );
         
+        if (!forecastResponse.ok) {
+            console.warn('Forecast fetch failed, but current weather is available');
+            // Still display current weather even if forecast fails
+            displayWeather(weatherData);
+            hideLoading();
+            return;
+        }
+        
         const forecastData = await forecastResponse.json();
+        console.log('Forecast Data:', forecastData); // Debug log
         
         displayWeather(weatherData);
         displayForecast(forecastData);
         hideLoading();
         
     } catch (error) {
+        console.error('Error details:', error); // Debug log
         hideLoading();
         showError(error.message);
         currentWeather.style.display = 'none';
@@ -117,9 +144,17 @@ async function getWeatherData(city) {
 
 // Get weather by coordinates
 async function getWeatherByCoordinates(lat, lon) {
+    // Check if API key is set
+    if (API_KEY === 'YOUR_API_KEY_HERE') {
+        showError('Please set your OpenWeatherMap API key in script.js');
+        return;
+    }
+
     try {
         showLoading();
         hideError();
+        
+        console.log('Fetching weather for coordinates:', lat, lon); // Debug log
         
         // Fetch current weather
         const weatherResponse = await fetch(
@@ -127,7 +162,11 @@ async function getWeatherByCoordinates(lat, lon) {
         );
         
         if (!weatherResponse.ok) {
-            throw new Error('Unable to fetch weather data');
+            if (weatherResponse.status === 401) {
+                throw new Error('Invalid API key. Please check your OpenWeatherMap API key');
+            } else {
+                throw new Error('Unable to fetch weather data');
+            }
         }
         
         const weatherData = await weatherResponse.json();
@@ -137,6 +176,13 @@ async function getWeatherByCoordinates(lat, lon) {
             `${BASE_URL}/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`
         );
         
+        if (!forecastResponse.ok) {
+            console.warn('Forecast fetch failed, but current weather is available');
+            displayWeather(weatherData);
+            hideLoading();
+            return;
+        }
+        
         const forecastData = await forecastResponse.json();
         
         displayWeather(weatherData);
@@ -144,6 +190,7 @@ async function getWeatherByCoordinates(lat, lon) {
         hideLoading();
         
     } catch (error) {
+        console.error('Error details:', error); // Debug log
         hideLoading();
         showError(error.message);
         currentWeather.style.display = 'none';
@@ -187,10 +234,19 @@ function displayForecast(data) {
         item.dt_txt.includes('12:00:00')
     ).slice(0, 5);
     
+    if (dailyForecasts.length === 0) {
+        // If no 12:00 PM forecasts, take every 8th item (approximately daily)
+        for (let i = 0; i < data.list.length && i < 40; i += 8) {
+            if (data.list[i]) {
+                dailyForecasts.push(data.list[i]);
+            }
+        }
+    }
+    
     forecastContainer.innerHTML = '';
     
-    dailyForecasts.forEach(forecast => {
-        const date = new Date(forecast.dt_txt);
+    dailyForecasts.slice(0, 5).forEach(forecast => {
+        const date = new Date(forecast.dt * 1000);
         const card = document.createElement('div');
         card.className = 'forecast-card';
         
@@ -238,5 +294,11 @@ function hideError() {
 
 // Initial load - show weather for a default city
 window.addEventListener('load', () => {
-    getWeatherData('London');
+    // Try Delhi first (more likely to work in your region)
+    getWeatherData('Delhi');
+});
+
+// Add this for debugging
+window.addEventListener('error', function(e) {
+    console.error('Global error:', e.error);
 });
